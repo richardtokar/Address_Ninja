@@ -135,16 +135,9 @@
       word-break: break-word;
       box-shadow: 0 8px 24px rgba(0,0,0,0.35);
       user-select: none;
-      touch-action: none;
-      cursor: grab;
+      touch-action: manipulation;
+      cursor: pointer;
       transition: transform 0.2s ease, box-shadow 0.2s ease, border-color 0.2s ease;
-    }
-
-    .address-card.dragging {
-      cursor: grabbing;
-      border-color: var(--accent);
-      box-shadow: 0 18px 38px rgba(0,0,0,0.5);
-      z-index: 10;
     }
 
     .address-card.selected {
@@ -250,13 +243,13 @@
     </section>
 
     <section class="panel">
-      <p class="instructions">Drag the card into a category, or tap the card then tap a category (great for mobile).</p>
+      <p class="instructions">Tap the card to select it, then tap the correct category.</p>
       <div class="card-area" id="cardArea">
         <div class="address-card" id="addressCard" tabindex="0" aria-label="Address card"></div>
       </div>
 
       <div class="zones" id="zones">
-        <div class="zone" data-type="IPv4" tabindex="0">IPv4<small>4 decimal octets (0–255)</small></div>
+        <div class="zone" data-type="IPv4" tabindex="0">IPv4<small>4 decimal octets (0–255), no leading zero octets</small></div>
         <div class="zone" data-type="IPv6" tabindex="0">IPv6<small>Hex groups with optional :: compression</small></div>
         <div class="zone" data-type="MAC" tabindex="0">MAC<small>AA:BB:CC:DD:EE:FF, AA-BB-..., or AABB.CCDD.EEFF</small></div>
         <div class="zone" data-type="Invalid" tabindex="0">Invalid<small>Doesn't match IPv4 / IPv6 / MAC rules</small></div>
@@ -277,6 +270,7 @@
       if (parts.length !== 4) return false;
       for (const p of parts) {
         if (p.length === 0 || !/^\d+$/.test(p)) return false;
+        if (p.length > 1 && p.startsWith('0')) return false;
         const num = Number(p);
         if (!Number.isInteger(num) || num < 0 || num > 255) return false;
       }
@@ -322,7 +316,7 @@
 
     function explain(str, type) {
       if (type === 'IPv4') {
-        return 'Valid IPv4: it has exactly four numeric octets, and each octet is in the 0–255 range. Leading zeros are still allowed here.';
+        return 'Valid IPv4: it has exactly four numeric octets, each is in the 0–255 range, and no octet uses a leading zero.';
       }
       if (type === 'IPv6') {
         return 'Valid IPv6: it uses hexadecimal hextets and may include one :: compression to shorten zero groups.';
@@ -332,6 +326,9 @@
       }
 
       if (/^\d+\.\d+\.\d+\.\d+$/.test(str)) {
+        if (str.split('.').some(p => p.length > 1 && p.startsWith('0'))) {
+          return 'Invalid: IPv4 octets cannot start with a leading zero unless the octet is exactly 0.';
+        }
         return 'Invalid: it looks IPv4-like, but at least one octet is not a valid 0–255 integer.';
       }
       if (str.includes(':::') || (str.match(/::/g) || []).length > 1) {
@@ -348,11 +345,7 @@
     const hex = '0123456789abcdef';
 
     function randomIPv4() {
-      const parts = Array.from({ length: 4 }, () => {
-        const n = rand(256);
-        if (Math.random() < 0.22) return String(n).padStart(3, '0');
-        return String(n);
-      });
+      const parts = Array.from({ length: 4 }, () => String(rand(256)));
       return parts.join('.');
     }
 
@@ -418,6 +411,11 @@
       return '999.999.999.999';
     }
 
+    function pickInvalidWithLetters() {
+      const letterBased = invalidPool.filter(item => /[g-zG-Z]/.test(item));
+      return letterBased[rand(letterBased.length)];
+    }
+
     function buildRound() {
       const questions = [];
       for (let i = 0; i < 3; i++) questions.push({ value: randomIPv4(), type: 'IPv4' });
@@ -431,7 +429,8 @@
         questions.push({ value: ip, type: 'IPv6' });
       }
       for (let i = 0; i < 2; i++) questions.push({ value: randomMAC(), type: 'MAC' });
-      for (let i = 0; i < 2; i++) questions.push({ value: pickInvalid(), type: 'Invalid' });
+      questions.push({ value: pickInvalidWithLetters(), type: 'Invalid' });
+      questions.push({ value: pickInvalid(), type: 'Invalid' });
 
       // Sanity alignment with validators.
       for (const q of questions) {
@@ -452,7 +451,7 @@
     function runSanityChecks() {
       const known = [
         ['192.168.1.1', 'IPv4'],
-        ['010.0.0.1', 'IPv4'],
+        ['010.0.0.1', 'Invalid'],
         ['256.1.1.1', 'Invalid'],
         ['2001:db8::1', 'IPv6'],
         ['::1', 'IPv6'],
@@ -584,83 +583,17 @@
       }
     }
 
-    // ---------- Drag + tap interaction (Pointer Events) ----------
-    const drag = {
-      active: false,
-      id: null,
-      startX: 0,
-      startY: 0,
-      dx: 0,
-      dy: 0,
-      moved: false
-    };
+    // ---------- Tap interaction ----------
 
     function resetCardTransform() {
       card.style.transform = '';
-      card.classList.remove('dragging');
     }
 
-    function zoneAtPoint(x, y) {
-      return zones.find(z => {
-        const r = z.getBoundingClientRect();
-        return x >= r.left && x <= r.right && y >= r.top && y <= r.bottom;
-      });
-    }
-
-    function highlightZoneAt(x, y) {
-      const over = zoneAtPoint(x, y);
-      zones.forEach(z => z.classList.toggle('active', z === over));
-      return over;
-    }
-
-    card.addEventListener('pointerdown', (e) => {
+    card.addEventListener('click', (e) => {
       if (state.answered || state.index >= state.questions.length) return;
-      drag.active = true;
-      drag.id = e.pointerId;
-      drag.startX = e.clientX;
-      drag.startY = e.clientY;
-      drag.dx = 0;
-      drag.dy = 0;
-      drag.moved = false;
-      card.setPointerCapture(e.pointerId);
-    });
-
-    card.addEventListener('pointermove', (e) => {
-      if (!drag.active || e.pointerId !== drag.id) return;
-      drag.dx = e.clientX - drag.startX;
-      drag.dy = e.clientY - drag.startY;
-      if (!drag.moved && Math.hypot(drag.dx, drag.dy) > 8) {
-        drag.moved = true;
-        card.classList.add('dragging');
-      }
-      if (drag.moved) {
-        card.style.transform = `translate(${drag.dx}px, ${drag.dy}px) scale(1.03)`;
-        highlightZoneAt(e.clientX, e.clientY);
-      }
-    });
-
-    card.addEventListener('pointerup', (e) => {
-      if (!drag.active || e.pointerId !== drag.id) return;
-
-      if (drag.moved) {
-        const over = zoneAtPoint(e.clientX, e.clientY);
-        if (over) submitAnswer(over.dataset.type);
-      } else {
-        state.selectedForTap = !state.selectedForTap;
-        card.classList.toggle('selected', state.selectedForTap);
-      }
-
-      drag.active = false;
-      drag.id = null;
-      zones.forEach(z => z.classList.remove('active'));
-      resetCardTransform();
-    });
-
-    card.addEventListener('pointercancel', () => {
-      drag.active = false;
-      drag.id = null;
-      zones.forEach(z => z.classList.remove('active'));
-      resetCardTransform();
+      state.selectedForTap = !state.selectedForTap;
+      card.classList.toggle('selected', state.selectedForTap);
+      zones.forEach(z => z.classList.toggle('active', state.selectedForTap));
     });
 
     zones.forEach((zone, idx) => {
@@ -668,14 +601,9 @@
         if (state.answered || state.index >= state.questions.length) return;
         if (state.selectedForTap) {
           submitAnswer(zone.dataset.type);
+          zones.forEach(z => z.classList.remove('active'));
         }
       });
-
-      zone.addEventListener('pointerenter', () => {
-        if (drag.active && drag.moved) zone.classList.add('active');
-      });
-
-      zone.addEventListener('pointerleave', () => zone.classList.remove('active'));
 
       zone.addEventListener('keydown', (e) => {
         if (e.key === 'Enter' || e.key === ' ') {
