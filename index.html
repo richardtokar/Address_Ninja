@@ -279,6 +279,7 @@
       if (parts.length !== 4) return false;
       for (const p of parts) {
         if (p.length === 0 || !/^\d+$/.test(p)) return false;
+        if (p.length > 1 && p.startsWith('0')) return false;
         const num = Number(p);
         if (!Number.isInteger(num) || num < 0 || num > 255) return false;
       }
@@ -324,7 +325,7 @@
 
     function explain(str, type) {
       if (type === 'IPv4') {
-        return 'Valid IPv4: it has exactly four numeric octets, and each octet is in the 0–255 range. Leading zeros are still allowed here.';
+        return 'Valid IPv4: it has exactly four numeric octets, each octet is in the 0–255 range, and multi-digit octets do not start with 0.';
       }
       if (type === 'IPv6') {
         return 'Valid IPv6: it uses hexadecimal hextets and may include one :: compression to shorten zero groups.';
@@ -334,7 +335,7 @@
       }
 
       if (/^\d+\.\d+\.\d+\.\d+$/.test(str)) {
-        return 'Invalid: it looks IPv4-like, but at least one octet is not a valid 0–255 integer.';
+        return 'Invalid: it looks IPv4-like, but at least one octet is out of range 0–255 or has a leading zero.';
       }
       if (str.includes(':::') || (str.match(/::/g) || []).length > 1) {
         return 'Invalid: IPv6 allows at most one "::" compression, so this format is not permitted.';
@@ -350,11 +351,7 @@
     const hex = '0123456789abcdef';
 
     function randomIPv4() {
-      const parts = Array.from({ length: 4 }, () => {
-        const n = rand(256);
-        if (Math.random() < 0.22) return String(n).padStart(3, '0');
-        return String(n);
-      });
+      const parts = Array.from({ length: 4 }, () => String(rand(256)));
       return parts.join('.');
     }
 
@@ -394,7 +391,26 @@
       return `${group()}.${group()}.${group()}`;
     }
 
-    const invalidPool = [
+    const invalidHexCharPool = [
+      // IPv6 invalids focused on non-hex letters G-Z.
+      '2001:db8:GGGG::1',
+      'ABCD:EFGH::1',
+      'FACE:B00K::1',
+      '1BAD:C0DE:XYZZ::1',
+      'FEED:DEAF:WXYZ:1234::1',
+      '2001:db8:Q123::1',
+      // MAC invalids focused on non-hex letters G-Z.
+      'AA:BB:CC:DD:EE:GG',
+      'AG:BB:CC:DD:EE:FF',
+      'AA-BB-CC-DD-EE-HH',
+      'AABB.CCDD.EEGG',
+      'W1:22:33:44:55:66',
+      'AA:YY:CC:DD:EE:FF',
+      'AA-BB-CC-DD-ZZ-11',
+      'AABB.CCZZ.DDEE'
+    ];
+
+    const invalidOtherPool = [
       '999.1.2.3',
       '10.20.30',
       '10.20.30.40.50',
@@ -423,9 +439,10 @@
     ];
 
     function pickInvalid() {
-      // Ensure invalid candidates never validate due to mistakes in logic changes.
-      for (let tries = 0; tries < 20; tries++) {
-        const c = invalidPool[rand(invalidPool.length)];
+      // Bias invalid options toward G-Z non-hex mistakes for IPv6/MAC distractors.
+      const preferredPool = Math.random() < 0.75 ? invalidHexCharPool : invalidOtherPool;
+      for (let tries = 0; tries < 30; tries++) {
+        const c = preferredPool[rand(preferredPool.length)];
         if (classifyAddress(c) === 'Invalid') return c;
       }
       return '999.999.999.999';
@@ -465,7 +482,7 @@
     function runSanityChecks() {
       const known = [
         ['192.168.1.1', 'IPv4'],
-        ['010.0.0.1', 'IPv4'],
+        ['010.0.0.1', 'Invalid'],
         ['256.1.1.1', 'Invalid'],
         ['2001:db8::1', 'IPv6'],
         ['::1', 'IPv6'],
