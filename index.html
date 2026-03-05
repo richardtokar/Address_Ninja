@@ -423,7 +423,19 @@
       'AABB.CCDD.EEF',
       'AABB-CCDD-EEFF',
       '12:34:56:78:9A:BC:DE',
-      '010.10.10.10'
+      // IPv6 invalids focused on non-hex letters G-Z.
+      '2001:db8:GGGG::1',
+      'ABCD:EFGH::1',
+      'FACE:B00K::1',
+      '1BAD:C0DE:XYZZ::1',
+      'FEED:DEAF:WXYZ:1234::1',
+      // MAC invalids focused on non-hex letters G-Z.
+      'AA:BB:CC:DD:EE:GG',
+      'AG:BB:CC:DD:EE:FF',
+      'AA-BB-CC-DD-EE-HH',
+      'AABB.CCDD.EEGG',
+      'W1:22:33:44:55:66',
+      'AA:YY:CC:DD:EE:FF'
     ];
 
     function pickInvalid() {
