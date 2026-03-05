@@ -1,0 +1,471 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>Network Address Ninja</title>
+  <style>
+    :root {
+      --bg: #0b1020;
+      --panel: #171f3d;
+      --panel2: #222d56;
+      --text: #eef3ff;
+      --muted: #a4b2d8;
+      --accent: #7bb1ff;
+      --good: #34d98f;
+      --bad: #ff667b;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100dvh;
+      font-family: Inter, "Segoe UI", Arial, sans-serif;
+      background:
+        radial-gradient(circle at 10% -20%, #2b3f7a, transparent 40%),
+        radial-gradient(circle at 100% 0%, #1f3566, transparent 35%),
+        var(--bg);
+      color: var(--text);
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+    }
+    .app {
+      width: min(1100px, 94vw);
+      margin: 16px auto 24px;
+      display: grid;
+      gap: 14px;
+    }
+    .card {
+      background: linear-gradient(180deg, rgba(255,255,255,0.06), rgba(255,255,255,0.02));
+      border: 1px solid rgba(255,255,255,0.14);
+      border-radius: 16px;
+      box-shadow: 0 16px 34px rgba(0,0,0,.33);
+    }
+    .top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      flex-wrap: wrap;
+      padding: 14px;
+    }
+    h1 { margin: 0; font-size: clamp(1.2rem, 2.5vw, 1.8rem); }
+    .stats { display: flex; gap: 10px; flex-wrap: wrap; }
+    .pill {
+      padding: 7px 12px;
+      border-radius: 999px;
+      background: var(--panel2);
+      border: 1px solid rgba(255,255,255,0.16);
+      font-weight: 700;
+    }
+    .controls { display: flex; gap: 8px; }
+    button {
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 10px;
+      background: #24366a;
+      color: var(--text);
+      padding: 9px 13px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+    button:disabled { opacity: .5; cursor: not-allowed; }
+    .main { padding: 14px; display: grid; gap: 14px; }
+    .instructions { margin: 0; color: var(--muted); }
+
+    .question {
+      min-height: 118px;
+      display: grid;
+      place-items: center;
+    }
+    .address {
+      width: min(100%, 760px);
+      background: linear-gradient(180deg, #2b3f7a, #233563);
+      border: 2px solid rgba(255,255,255,0.22);
+      border-radius: 15px;
+      padding: 18px;
+      text-align: center;
+      font-size: clamp(1.1rem, 3vw, 1.7rem);
+      font-weight: 800;
+      letter-spacing: .4px;
+      word-break: break-word;
+      user-select: none;
+      cursor: pointer;
+      transition: transform .18s ease, outline-color .18s ease;
+    }
+    .address.selected {
+      outline: 3px solid rgba(123,177,255,.7);
+      outline-offset: 3px;
+      transform: scale(1.015);
+    }
+
+    .zones {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0,1fr));
+      gap: 12px;
+    }
+    .zone {
+      min-height: 122px;
+      border: 2px dashed rgba(255,255,255,0.25);
+      border-radius: 14px;
+      display: grid;
+      place-content: center;
+      text-align: center;
+      padding: 12px;
+      font-size: clamp(1rem, 2.4vw, 1.3rem);
+      font-weight: 800;
+      background: var(--panel);
+      transition: transform .15s ease, border-color .15s ease;
+      cursor: pointer;
+    }
+    .zone small { display: block; color: var(--muted); margin-top: 8px; font-size: .8rem; font-weight: 500; }
+    .zone.active { border-color: var(--accent); transform: scale(1.01); }
+    .zone.kbd { box-shadow: inset 0 0 0 3px rgba(123,177,255,.35); }
+
+    .feedback {
+      padding: 14px;
+      min-height: 96px;
+      display: grid;
+      align-content: center;
+      gap: 6px;
+      border-width: 2px;
+    }
+    .feedback h2 { margin: 0; font-size: clamp(1.25rem,2.6vw,1.65rem); }
+    .feedback p { margin: 0; color: var(--muted); line-height: 1.35; }
+    .flash-good { animation: good .6s ease; }
+    .flash-bad { animation: bad .6s ease; }
+    @keyframes good { from { background: rgba(52,217,143,.17); transform: scale(.99);} to { transform: scale(1);} }
+    @keyframes bad { from { background: rgba(255,102,123,.17); transform: scale(.99);} to { transform: scale(1);} }
+
+    @media (max-width: 760px){ .zones{grid-template-columns:1fr;} }
+  </style>
+</head>
+<body>
+  <main class="app">
+    <section class="top card">
+      <h1>🥷 Network Address Ninja</h1>
+      <div class="stats">
+        <span class="pill" id="qCount">Question 1 / 15</span>
+        <span class="pill" id="score">Score: 0 / 15</span>
+      </div>
+      <div class="controls">
+        <button id="resetBtn">Reset Round</button>
+        <button id="nextBtn" disabled>Next</button>
+      </div>
+    </section>
+
+    <section class="main card">
+      <p class="instructions">Tap the address card to select it, then tap the correct category.</p>
+      <div class="question"><div class="address" id="address" tabindex="0"></div></div>
+      <div class="zones" id="zones">
+        <div class="zone" data-type="IPv4" tabindex="0">IPv4<small>4 decimal octets 0–255, no leading zero octets</small></div>
+        <div class="zone" data-type="IPv6" tabindex="0">IPv6<small>Hex hextets with optional single :: compression</small></div>
+        <div class="zone" data-type="MAC" tabindex="0">MAC / Physical / Hardware<small>AA:BB:CC:DD:EE:FF, AA-BB-..., or AABB.CCDD.EEFF</small></div>
+        <div class="zone" data-type="Invalid" tabindex="0">Invalid<small>Anything not valid IPv4 / IPv6 / MAC</small></div>
+      </div>
+    </section>
+
+    <section class="feedback card" id="feedback" aria-live="polite">
+      <h2 id="fbTitle">Ready?</h2>
+      <p id="fbText">Classify the address shown above.</p>
+    </section>
+  </main>
+
+  <script>
+    // ---------- Validators ----------
+    function isValidIPv4(s){
+      if(!/^\d+\.\d+\.\d+\.\d+$/.test(s)) return false;
+      const p=s.split('.');
+      if(p.length!==4) return false;
+      for(const oct of p){
+        if(oct.length===0 || !/^\d+$/.test(oct)) return false;
+        if(oct.length>1 && oct.startsWith('0')) return false;
+        const n=Number(oct);
+        if(!Number.isInteger(n)||n<0||n>255) return false;
+      }
+      return true;
+    }
+
+    function isValidIPv6(s){
+      if(!s || !/^[0-9a-fA-F:]+$/.test(s)) return false;
+      if((s.match(/::/g)||[]).length>1) return false;
+      const hextet=/^[0-9a-fA-F]{1,4}$/;
+
+      if(s.includes('::')){
+        const [left,right]=s.split('::');
+        const L=left?left.split(':'):[];
+        const R=right?right.split(':'):[];
+        if(L.some(x=>!hextet.test(x))||R.some(x=>!hextet.test(x))) return false;
+        return (L.length+R.length)<8;
+      }
+
+      const parts=s.split(':');
+      if(parts.length!==8) return false;
+      return parts.every(h=>hextet.test(h));
+    }
+
+    function isValidMAC(s){
+      return /^[0-9a-fA-F]{2}(:[0-9a-fA-F]{2}){5}$/.test(s)
+        || /^[0-9a-fA-F]{2}(-[0-9a-fA-F]{2}){5}$/.test(s)
+        || /^[0-9a-fA-F]{4}(\.[0-9a-fA-F]{4}){2}$/.test(s);
+    }
+
+    function classifyAddress(s){
+      if(isValidIPv4(s)) return 'IPv4';
+      if(isValidIPv6(s)) return 'IPv6';
+      if(isValidMAC(s)) return 'MAC';
+      return 'Invalid';
+    }
+
+    function explain(value, type){
+      if(type==='IPv4') return 'Valid IPv4: exactly four decimal octets, each 0–255, and none starts with a leading zero.';
+      if(type==='IPv6') return 'Valid IPv6: hex hextets (1–4 hex chars) with optional single :: compression.';
+      if(type==='MAC') return 'Valid MAC: exactly 12 hex digits in colon, dash, or dotted Cisco format.';
+      if(/^\d+\.\d+\.\d+\.\d+$/.test(value)){
+        if(value.split('.').some(o=>o.length>1 && o.startsWith('0'))) return 'Invalid: IPv4 octets cannot have leading zeros.';
+        return 'Invalid: IPv4-style, but one or more octets are outside 0–255.';
+      }
+      if(value.includes(':::') || (value.match(/::/g)||[]).length>1) return 'Invalid: IPv6 allows at most one :: compression.';
+      if(/[g-zG-Z]/.test(value)) return 'Invalid: hex sections can only use 0–9 and A–F.';
+      return 'Invalid: does not match accepted IPv4, IPv6, or MAC rules.';
+    }
+
+    // ---------- Generators ----------
+    const rand=n=>Math.floor(Math.random()*n);
+    const HEX='0123456789abcdef';
+    const hextet=()=>Array.from({length:1+rand(4)},()=>HEX[rand(16)]).join('');
+
+    function randomIPv4(){ return Array.from({length:4},()=>String(rand(256))).join('.'); }
+
+    function randomIPv6(){
+      if(Math.random()<0.45) return Array.from({length:8},hextet).join(':');
+      const l=rand(6), r=rand(7-l);
+      const L=Array.from({length:l},hextet).join(':');
+      const R=Array.from({length:r},hextet).join(':');
+      if(!L&&!R) return '::';
+      if(!L) return `::${R}`;
+      if(!R) return `${L}::`;
+      return `${L}::${R}`;
+    }
+
+    function randomMAC(){
+      const b=()=>`${HEX[rand(16)]}${HEX[rand(16)]}`.toUpperCase();
+      const f=rand(3);
+      if(f===0) return Array.from({length:6},b).join(':');
+      if(f===1) return Array.from({length:6},b).join('-');
+      const g=()=>`${b()}${b()}`;
+      return `${g()}.${g()}.${g()}`;
+    }
+
+    const invalidPool=[
+      '999.1.2.3','10.20.30','10.20.30.40.50','01.2.3.4','256.0.0.1',
+      '2001:::1','2001:db8::1::1','2001:db8:zzzz::1','12345::1','fe80::t123',
+      'AA:BB:CC:DD:EE','AA:BB:CC:DD:EE:GG','AABB.CCDD.EEF','AABB-CCDD-EEFF','AZ:BB:CC:DD:EE:FF'
+    ];
+
+    const invalidIPv6LetterPool=[
+      '2001:db8:zzzz::1','fe80::t123','abcd:efgh::1'
+    ];
+
+    const invalidMACLetterPool=[
+      'AA:BB:CC:DD:EE:GG','AZ:BB:CC:DD:EE:FF','AABB.CCDD.EEGG'
+    ];
+
+    function pickInvalid(){
+      for(let i=0;i<30;i++){
+        const c=invalidPool[rand(invalidPool.length)];
+        if(classifyAddress(c)==='Invalid') return c;
+      }
+      return '999.999.999.999';
+    }
+    function pickInvalidWithLetters(){
+      const arr=invalidPool.filter(v=>/[g-zG-Z]/.test(v));
+      return arr[rand(arr.length)];
+    }
+
+    function pickInvalidIPv6WithLetters(){
+      return invalidIPv6LetterPool[rand(invalidIPv6LetterPool.length)];
+    }
+
+    function pickInvalidMACWithLetters(){
+      return invalidMACLetterPool[rand(invalidMACLetterPool.length)];
+    }
+
+    function buildRound(){
+      const q=[];
+      for(let i=0;i<5;i++) q.push({value:randomIPv4(), type:'IPv4'});
+      let hasCompressed=false;
+      for(let i=0;i<4;i++){
+        let v=randomIPv6();
+        if(i===3 && !hasCompressed) v='2001:db8::1';
+        if(v.includes('::')) hasCompressed=true;
+        q.push({value:v,type:'IPv6'});
+      }
+      for(let i=0;i<3;i++) q.push({value:randomMAC(), type:'MAC'});
+      q.push({value:pickInvalidIPv6WithLetters(), type:'Invalid'});
+      q.push({value:pickInvalidMACWithLetters(), type:'Invalid'});
+      q.push({value:pickInvalidWithLetters(), type:'Invalid'});
+
+      // consistency guard
+      q.forEach(item=>{ item.type = classifyAddress(item.value); });
+
+      for(let i=q.length-1;i>0;i--){
+        const j=rand(i+1);
+        [q[i],q[j]]=[q[j],q[i]];
+      }
+      return q;
+    }
+
+    function runSanityChecks(){
+      const known=[
+        ['192.168.1.1','IPv4'],['010.0.0.1','Invalid'],['256.1.1.1','Invalid'],
+        ['2001:db8::1','IPv6'],['::1','IPv6'],['2001:::1','Invalid'],
+        ['AA:BB:CC:DD:EE:FF','MAC'],['AABB.CCDD.EEFF','MAC'],['AA:BB:CC:DD:EE:GG','Invalid']
+      ];
+      known.forEach(([v,e])=>{ if(classifyAddress(v)!==e) console.error('Sanity failed', v, e); });
+      for(let i=0;i<100;i++){
+        if(classifyAddress(randomIPv4())!=='IPv4') console.error('IPv4 gen fail');
+        if(classifyAddress(randomIPv6())!=='IPv6') console.error('IPv6 gen fail');
+        if(classifyAddress(randomMAC())!=='MAC') console.error('MAC gen fail');
+      }
+    }
+    runSanityChecks();
+
+    // ---------- Game ----------
+    const state={ questions:[], idx:0, score:0, answered:false, selected:false, auto:null, kbd:0 };
+
+    const el={
+      address:document.getElementById('address'),
+      zones:[...document.querySelectorAll('.zone')],
+      qCount:document.getElementById('qCount'),
+      score:document.getElementById('score'),
+      nextBtn:document.getElementById('nextBtn'),
+      resetBtn:document.getElementById('resetBtn'),
+      fb:document.getElementById('feedback'),
+      fbTitle:document.getElementById('fbTitle'),
+      fbText:document.getElementById('fbText')
+    };
+
+    function showFeedback(title,text,tone){
+      el.fbTitle.textContent=title;
+      el.fbText.textContent=text;
+      el.fb.classList.remove('flash-good','flash-bad');
+      if(tone==='good') el.fb.classList.add('flash-good');
+      if(tone==='bad') el.fb.classList.add('flash-bad');
+    }
+
+    function updateHeader(){
+      el.score.textContent=`Score: ${state.score} / 15`;
+      el.qCount.textContent=`Question ${Math.min(state.idx+1,15)} / 15`;
+    }
+
+    function renderQuestion(){
+      if(state.idx>=state.questions.length) return endRound();
+      const q=state.questions[state.idx];
+      el.address.textContent=q.value;
+      state.answered=false;
+      state.selected=false;
+      el.address.classList.remove('selected');
+      el.zones.forEach(z=>z.classList.remove('active'));
+      el.nextBtn.disabled=true;
+      updateHeader();
+    }
+
+    function startRound(){
+      clearTimeout(state.auto);
+      state.questions=buildRound();
+      state.idx=0;
+      state.score=0;
+      state.answered=false;
+      state.selected=false;
+      el.nextBtn.textContent='Next';
+      el.nextBtn.disabled=true;
+      showFeedback('Ready?','Classify the address shown above.',null);
+      renderQuestion();
+    }
+
+    function endRound(){
+      el.address.textContent='Round complete!';
+      state.answered=true;
+      el.nextBtn.disabled=false;
+      el.nextBtn.textContent='New Round';
+      showFeedback('Nice work!',`Final score: ${state.score} / 15. Tap “New Round” to play again.`,'good');
+      el.qCount.textContent='Question 15 / 15';
+    }
+
+    function submit(type){
+      if(state.answered || state.idx>=state.questions.length) return;
+      state.answered=true;
+      const q=state.questions[state.idx];
+      const ok=type===q.type;
+      if(ok) state.score++;
+      updateHeader();
+      showFeedback(ok?'✅ Correct!':'❌ Try again!',`${explain(q.value,q.type)} (Your pick: ${type})`,ok?'good':'bad');
+      el.nextBtn.disabled=false;
+      clearTimeout(state.auto);
+      state.auto=setTimeout(nextQuestion,1000);
+    }
+
+    function nextQuestion(){
+      clearTimeout(state.auto);
+      if(state.idx>=state.questions.length){ startRound(); return; }
+      state.idx++;
+      if(state.idx>=state.questions.length) endRound();
+      else renderQuestion();
+    }
+
+    el.address.addEventListener('click',()=>{
+      if(state.answered || state.idx>=state.questions.length) return;
+      state.selected=!state.selected;
+      el.address.classList.toggle('selected',state.selected);
+      el.zones.forEach(z=>z.classList.toggle('active',state.selected));
+    });
+
+    el.zones.forEach((zone,i)=>{
+      zone.addEventListener('click',()=>{
+        if(state.selected && !state.answered) {
+          submit(zone.dataset.type);
+          el.zones.forEach(z=>z.classList.remove('active'));
+        }
+      });
+      zone.addEventListener('keydown',(e)=>{
+        if((e.key==='Enter'||e.key===' ') && state.selected && !state.answered){
+          e.preventDefault();
+          submit(zone.dataset.type);
+        }
+      });
+      zone.dataset.index=String(i);
+    });
+
+    window.addEventListener('keydown',(e)=>{
+      if(state.idx>=state.questions.length) return;
+      if(['ArrowLeft','ArrowRight','ArrowUp','ArrowDown'].includes(e.key)){
+        e.preventDefault();
+        const mobile=window.matchMedia('(max-width:760px)').matches;
+        if(mobile){
+          if(e.key==='ArrowDown') state.kbd=Math.min(3,state.kbd+1);
+          if(e.key==='ArrowUp') state.kbd=Math.max(0,state.kbd-1);
+        }else{
+          if(e.key==='ArrowRight') state.kbd=Math.min(3,state.kbd+1);
+          if(e.key==='ArrowLeft') state.kbd=Math.max(0,state.kbd-1);
+          if(e.key==='ArrowDown') state.kbd=Math.min(3,state.kbd+2);
+          if(e.key==='ArrowUp') state.kbd=Math.max(0,state.kbd-2);
+        }
+        el.zones.forEach((z,i)=>z.classList.toggle('kbd',i===state.kbd));
+      }
+      if(e.key==='Enter'){
+        if(!state.selected && !state.answered){
+          state.selected=true;
+          el.address.classList.add('selected');
+          el.zones.forEach(z=>z.classList.add('active'));
+        } else if(state.selected && !state.answered){
+          submit(el.zones[state.kbd].dataset.type);
+        }
+      }
+    });
+
+    el.nextBtn.addEventListener('click',nextQuestion);
+    el.resetBtn.addEventListener('click',startRound);
+
+    startRound();
+  </script>
+</body>
+</html>
