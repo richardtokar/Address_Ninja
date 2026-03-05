@@ -240,8 +240,8 @@
     <section class="topbar">
       <h1>🥷 Network Address Ninja</h1>
       <div class="stats">
-        <span class="pill" id="questionCounter">Question 1 / 10</span>
-        <span class="pill" id="scorePill">Score: 0 / 10</span>
+        <span class="pill" id="questionCounter">Question 1 / 15</span>
+        <span class="pill" id="scorePill">Score: 0 / 15</span>
       </div>
       <div class="controls">
         <button id="resetBtn">Reset Round</button>
@@ -270,6 +270,8 @@
   </main>
 
   <script>
+    const ROUND_SIZE = 15;
+
     // ---------- Validation ----------
     function isValidIPv4(str) {
       if (!/^\d+\.\d+\.\d+\.\d+$/.test(str)) return false;
@@ -400,13 +402,24 @@
       '1..2.3',
       '2001:::1',
       '2001:db8::1::1',
-      '2001:db8:zzzz::1',
       '12345::1',
       'AA:BB:CC:DD:EE',
-      'AA:BB:CC:DD:EE:GG',
       'AABB.CCDD.EEF',
       'AABB-CCDD-EEFF',
-      '12:34:56:78:9A:BC:DE'
+      '12:34:56:78:9A:BC:DE',
+      // IPv6 invalids focused on non-hex letters G-Z.
+      '2001:db8:GGGG::1',
+      'ABCD:EFGH::1',
+      'FACE:B00K::1',
+      '1BAD:C0DE:XYZZ::1',
+      'FEED:DEAF:WXYZ:1234::1',
+      // MAC invalids focused on non-hex letters G-Z.
+      'AA:BB:CC:DD:EE:GG',
+      'AG:BB:CC:DD:EE:FF',
+      'AA-BB-CC-DD-EE-HH',
+      'AABB.CCDD.EEGG',
+      'W1:22:33:44:55:66',
+      'AA:YY:CC:DD:EE:FF'
     ];
 
     function pickInvalid() {
@@ -420,18 +433,18 @@
 
     function buildRound() {
       const questions = [];
-      for (let i = 0; i < 3; i++) questions.push({ value: randomIPv4(), type: 'IPv4' });
+      for (let i = 0; i < 4; i++) questions.push({ value: randomIPv4(), type: 'IPv4' });
       let compressedAdded = false;
-      for (let i = 0; i < 3; i++) {
+      for (let i = 0; i < 4; i++) {
         let ip = randomIPv6();
-        if (i === 2 && !compressedAdded) {
+        if (i === 3 && !compressedAdded) {
           ip = '2001:db8::1';
         }
         if (ip.includes('::')) compressedAdded = true;
         questions.push({ value: ip, type: 'IPv6' });
       }
-      for (let i = 0; i < 2; i++) questions.push({ value: randomMAC(), type: 'MAC' });
-      for (let i = 0; i < 2; i++) questions.push({ value: pickInvalid(), type: 'Invalid' });
+      for (let i = 0; i < 3; i++) questions.push({ value: randomMAC(), type: 'MAC' });
+      for (let i = 0; i < 4; i++) questions.push({ value: pickInvalid(), type: 'Invalid' });
 
       // Sanity alignment with validators.
       for (const q of questions) {
@@ -513,9 +526,9 @@
     }
 
     function updateHeader() {
-      scorePill.textContent = `Score: ${state.score} / 10`;
-      const shown = Math.min(state.index + 1, 10);
-      questionCounter.textContent = `Question ${shown} / 10`;
+      scorePill.textContent = `Score: ${state.score} / ${ROUND_SIZE}`;
+      const shown = Math.min(state.index + 1, ROUND_SIZE);
+      questionCounter.textContent = `Question ${shown} / ${ROUND_SIZE}`;
     }
 
     function renderQuestion() {
@@ -536,8 +549,8 @@
 
     function endRound() {
       card.textContent = 'Round complete!';
-      showFeedback('Nice work!', `Final score: ${state.score} / 10. Tap “New Round” to play again.`, 'good');
-      questionCounter.textContent = 'Question 10 / 10';
+      showFeedback('Nice work!', `Final score: ${state.score} / ${ROUND_SIZE}. Tap “New Round” to play again.`, 'good');
+      questionCounter.textContent = `Question ${ROUND_SIZE} / ${ROUND_SIZE}`;
       nextBtn.disabled = false;
       nextBtn.textContent = 'New Round';
       state.answered = true;
